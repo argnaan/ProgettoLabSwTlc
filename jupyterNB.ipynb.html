@@ -1,0 +1,310 @@
+<html>
+<head>
+<title>jupyterNB.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #808080;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6897bb;}
+.s4 { color: #6a8759;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+jupyterNB.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% md 
+</span><span class="s1"># Progetto d'esame per il corso Laboratorio di Software per le telecomunicazioni 
+_Andrea Argnani_ 
+a.a. 2023/2024 
+ 
+## Traccia d'esame: 
+_In questo progetto, viene fornito il dataset housing.csv, in cui sono riportate le coordinate, numero di stanze, di camere da letto, abitanti e altre informazioni su delle abitazioni in California (per zona). L’obiettivo del progetto è quello di predire il valore medio dell’abitazione (median_house_value) con determinate caratteristiche._ 
+</span><span class="s0">#%% md 
+</span><span class="s1">## Importazione librerie: 
+</span><span class="s0">#%% 
+</span><span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+<span class="s2">import </span><span class="s1">matplotlib.pyplot </span><span class="s2">as </span><span class="s1">plt</span>
+<span class="s2">import </span><span class="s1">pandas </span><span class="s2">as </span><span class="s1">pd</span>
+<span class="s2">import </span><span class="s1">seaborn </span><span class="s2">as </span><span class="s1">sns</span>
+<span class="s2">from </span><span class="s1">sklearn.linear_model </span><span class="s2">import </span><span class="s1">LinearRegression</span>
+<span class="s2">from </span><span class="s1">sklearn.model_selection </span><span class="s2">import </span><span class="s1">train_test_split</span>
+<span class="s2">from </span><span class="s1">sklearn.model_selection </span><span class="s2">import </span><span class="s1">KFold</span>
+<span class="s2">from </span><span class="s1">sklearn.model_selection </span><span class="s2">import </span><span class="s1">cross_val_predict</span>
+<span class="s2">from </span><span class="s1">sklearn.metrics </span><span class="s2">import </span><span class="s1">r2_score</span>
+<span class="s2">import </span><span class="s1">numpy.random </span><span class="s2">as </span><span class="s1">rnd</span>
+<span class="s0">#%% md 
+</span><span class="s1">Imposto un random seed per avere risultati ripetibili: 
+</span><span class="s0">#%% 
+</span><span class="s1">RS = </span><span class="s3">24</span>
+<span class="s1">rnd.seed(RS)</span>
+<span class="s0">#%% md 
+</span><span class="s1">## Importazione dataset 
+</span><span class="s0">#%% 
+</span><span class="s1">df = pd.read_csv(</span><span class="s4">'housing.csv'</span><span class="s1">)</span>
+<span class="s1">df.head(</span><span class="s3">6</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1"># Data preprocessing: 
+Si controlla se ci sono dati mancanti: 
+</span><span class="s0">#%% 
+</span><span class="s2">for </span><span class="s1">column </span><span class="s2">in </span><span class="s1">df.columns:</span>
+    <span class="s1">n_missing = df[column].isnull().sum()</span>
+    <span class="s1">print(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">column</span><span class="s2">} </span><span class="s4">-&gt; </span><span class="s2">{</span><span class="s1">n_missing</span><span class="s2">} </span><span class="s4">missing values&quot;</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">L' unica colonna con dati mancanti è _total_bedrooms_. Si può ipotizzare che il numero di camere da letto sia proporzionale al numero di stanze, quindi si può calcolare il rapporto tra camere da letto e stanze e moltiplicarlo per il numero di stanze per ottenere il numero di camere da letto dove il dato manca. 
+Si verifica questa ipotesi calcolando la correlazione tra le due variabili: 
+</span><span class="s0">#%% 
+</span><span class="s1">print(</span><span class="s4">f&quot;Correlazione: </span><span class="s2">{</span><span class="s1">df[</span><span class="s4">'total_bedrooms'</span><span class="s1">].corr(df[</span><span class="s4">'total_rooms'</span><span class="s1">])</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+<span class="s1">sns.regplot(x=</span><span class="s4">'total_rooms'</span><span class="s2">, </span><span class="s1">y=</span><span class="s4">'total_bedrooms'</span><span class="s2">, </span><span class="s1">data=df)</span>
+<span class="s0">#%% md 
+</span><span class="s1">La correlazione è molto alta (0.93), per cui si procede a sostituire i valori mancanti con il valore calcolato: 
+</span><span class="s0">#%% 
+</span><span class="s1">df_p = df.dropna(subset=[</span><span class="s4">'total_bedrooms'</span><span class="s1">])</span>
+<span class="s1">BoR = df_p[</span><span class="s4">'total_bedrooms'</span><span class="s1">] / df_p[</span><span class="s4">'total_rooms'</span><span class="s1">]</span>
+<span class="s1">df[</span><span class="s4">'total_bedrooms'</span><span class="s1">] = df[</span><span class="s4">'total_bedrooms'</span><span class="s1">].fillna(df[</span><span class="s4">'total_rooms'</span><span class="s1">] * BoR.mean())</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Ricerca di misspelling nelle variabili non numeriche: 
+</span><span class="s0">#%% 
+</span><span class="s1">print(df[</span><span class="s4">'ocean_proximity'</span><span class="s1">].unique())</span>
+<span class="s0">#%% md 
+</span><span class="s1">L' unica variabile non numerica è _ocean_proximity_ e non contiene misspelling. 
+</span><span class="s0">#%% md 
+</span><span class="s1">### Ricerca di outlier 
+</span><span class="s0">#%% 
+</span><span class="s1">df_noOp = df.drop(columns=[</span><span class="s4">'ocean_proximity'</span><span class="s1">])</span>
+<span class="s1">fig</span><span class="s2">, </span><span class="s1">axis = plt.subplots(</span><span class="s3">3</span><span class="s2">, </span><span class="s3">3</span><span class="s2">, </span><span class="s1">figsize=(</span><span class="s3">10</span><span class="s2">, </span><span class="s3">10</span><span class="s1">))</span>
+<span class="s2">for </span><span class="s1">i</span><span class="s2">, </span><span class="s1">column </span><span class="s2">in </span><span class="s1">enumerate(df_noOp.columns):</span>
+    <span class="s1">axis[i//</span><span class="s3">3</span><span class="s2">, </span><span class="s1">i%</span><span class="s3">3</span><span class="s1">].boxplot(df_noOp[column])</span>
+    <span class="s1">axis[i//</span><span class="s3">3</span><span class="s2">, </span><span class="s1">i%</span><span class="s3">3</span><span class="s1">].set_title(column)</span>
+<span class="s1">plt.tight_layout()</span>
+<span class="s1">plt.show()</span>
+<span class="s0">#%% md 
+</span><span class="s1">Ci sono molti valori che superano il baffo superiore del boxplot, ma non si considerano come outlier perché sono dovuti alla distribuzione dei dati. 
+Distribuzione dei dati: 
+</span><span class="s0">#%% 
+</span><span class="s1">fig</span><span class="s2">, </span><span class="s1">axis = plt.subplots(</span><span class="s3">3</span><span class="s2">, </span><span class="s3">3</span><span class="s2">, </span><span class="s1">figsize=(</span><span class="s3">10</span><span class="s2">, </span><span class="s3">10</span><span class="s1">))</span>
+<span class="s2">for </span><span class="s1">i</span><span class="s2">, </span><span class="s1">column </span><span class="s2">in </span><span class="s1">enumerate(df_noOp.columns):</span>
+    <span class="s1">ax = axis[i//</span><span class="s3">3</span><span class="s2">, </span><span class="s1">i%</span><span class="s3">3</span><span class="s1">]</span>
+    <span class="s1">df_noOp[column].plot(kind=</span><span class="s4">'kde'</span><span class="s2">, </span><span class="s1">ax=ax</span><span class="s2">, </span><span class="s1">x=</span><span class="s4">'auto'</span><span class="s1">)</span>
+    <span class="s1">ax.set_title(column)</span>
+<span class="s1">plt.tight_layout()</span>
+<span class="s1">plt.show()</span>
+<span class="s0">#%% md 
+</span><span class="s1">## Data format 
+Si convertono i valori di _ocean_proximity_ in valori numerici con il metodo _get_dummies_ 
+</span><span class="s0">#%% 
+</span><span class="s1">print(df.dtypes)</span>
+<span class="s1">df = pd.get_dummies(data=df</span><span class="s2">, </span><span class="s1">columns=[</span><span class="s4">'ocean_proximity'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">drop_first=</span><span class="s2">False</span><span class="s1">)</span>
+<span class="s1">print(df.dtypes)</span>
+<span class="s1">df.head(</span><span class="s3">6</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1"># Regressione lineare semplice 
+Come primo approccio si prova una regressione lineare semplice, scegliendo la variabile con la più alta correlazione: 
+</span><span class="s0">#%% 
+</span><span class="s2">for </span><span class="s1">i</span><span class="s2">, </span><span class="s1">col </span><span class="s2">in </span><span class="s1">enumerate(df.columns):</span>
+    <span class="s2">if </span><span class="s1">col != </span><span class="s4">'median_house_value'</span><span class="s1">:</span>
+        <span class="s1">print(</span><span class="s4">f&quot;Correlazione tra prezzo e </span><span class="s2">{</span><span class="s1">col</span><span class="s2">}</span><span class="s4">: </span><span class="s2">{</span><span class="s1">df[</span><span class="s4">'median_house_value'</span><span class="s1">].corr(df[col])</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">La variabile con la più alta correlazione è _median_income_. Questo il suo grafico di correlazione: 
+</span><span class="s0">#%% 
+</span><span class="s1">sns.regplot(x=</span><span class="s4">'median_income'</span><span class="s2">, </span><span class="s1">y=</span><span class="s4">'median_house_value'</span><span class="s2">, </span><span class="s1">data=df)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Train test split 
+</span><span class="s0">#%% 
+</span><span class="s1">df_reg = df[[</span><span class="s4">'median_income'</span><span class="s2">, </span><span class="s4">'median_house_value'</span><span class="s1">]]</span>
+<span class="s1">X = df_reg.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y = df_reg[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+<span class="s1">X_train</span><span class="s2">, </span><span class="s1">X_test</span><span class="s2">, </span><span class="s1">Y_train</span><span class="s2">, </span><span class="s1">Y_test = train_test_split(X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">test_size=</span><span class="s3">0.2</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True, </span><span class="s1">random_state=RS)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Calcolo regressione lineare con holdout validation: 
+</span><span class="s0">#%% 
+</span><span class="s1">regressor = LinearRegression()</span>
+<span class="s1">regressor.fit(X_train</span><span class="s2">, </span><span class="s1">Y_train)</span>
+
+<span class="s1">y_hat = regressor.predict(X_test)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Prestazioni del modello 
+Si definisce una funzione che stampi i valori utili a valutare le prestazioni del modello: 
+</span><span class="s0">#%% 
+</span><span class="s2">def </span><span class="s1">prestazioni(y_hat_p</span><span class="s2">, </span><span class="s1">Y_test_p</span><span class="s2">, </span><span class="s1">n_feature):</span>
+    <span class="s1">mse = np.mean((y_hat_p - Y_test_p)**</span><span class="s3">2</span><span class="s1">)</span>
+    <span class="s1">mae = np.mean(np.abs(y_hat_p - Y_test_p))</span>
+    <span class="s1">print(</span><span class="s4">f&quot;MSE: </span><span class="s2">{</span><span class="s1">mse</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">print(</span><span class="s4">f&quot;Root MSE: </span><span class="s2">{</span><span class="s1">np.sqrt(mse)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">print(</span><span class="s4">f&quot;MAE: </span><span class="s2">{</span><span class="s1">mae</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">print(</span><span class="s4">f&quot;R2 score </span><span class="s2">{</span><span class="s1">r2_score(Y_test_p</span><span class="s2">, </span><span class="s1">y_hat_p)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">print(</span><span class="s4">f&quot;Adj. R2 score </span><span class="s2">{</span><span class="s1">adj_r2_score(Y_test_p</span><span class="s2">, </span><span class="s1">y_hat_p</span><span class="s2">, </span><span class="s1">n_feature)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    
+<span class="s2">def </span><span class="s1">adj_r2_score(y_true</span><span class="s2">, </span><span class="s1">y_pred</span><span class="s2">, </span><span class="s1">n_features):</span>
+    <span class="s2">return </span><span class="s3">1 </span><span class="s1">- (</span><span class="s3">1 </span><span class="s1">- r2_score(y_true</span><span class="s2">, </span><span class="s1">y_pred)) * (len(y_true) - </span><span class="s3">1</span><span class="s1">) / (len(y_true) - n_features - </span><span class="s3">1</span><span class="s1">)</span>
+
+<span class="s1">results = []</span>
+<span class="s0">#%% 
+</span><span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y_test</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Semplice&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:</span><span class="s3">1</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;Holdout&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)})</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si è ottenuto un R2 score di **0.490**, che non è un buon risultato, ma è comunque un buon punto di partenza. 
+</span><span class="s0">#%% md 
+</span><span class="s1">## Con k-fold cross validation 
+Iteriamo con diversi valori di n_fold per trovare il valore migliore: 
+</span><span class="s0">#%% 
+</span><span class="s1">r2_scores = []</span>
+<span class="s1">n_folds = [</span><span class="s3">2</span><span class="s2">, </span><span class="s3">3</span><span class="s2">, </span><span class="s3">4</span><span class="s2">, </span><span class="s3">5</span><span class="s2">, </span><span class="s3">10</span><span class="s2">, </span><span class="s3">50</span><span class="s2">,  </span><span class="s3">100</span><span class="s2">, </span><span class="s3">200</span><span class="s2">, </span><span class="s3">500</span><span class="s2">, </span><span class="s3">1000</span><span class="s1">]</span>
+<span class="s1">print(</span><span class="s4">&quot;n_fold:</span><span class="s2">\t\t\t</span><span class="s4">R2 score:&quot;</span><span class="s1">)</span>
+<span class="s2">for </span><span class="s1">n_fold </span><span class="s2">in </span><span class="s1">n_folds:</span>
+    <span class="s1">kf = KFold(n_splits=n_fold</span><span class="s2">, </span><span class="s1">random_state=</span><span class="s3">42</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">regressor = LinearRegression()</span>
+    <span class="s1">y_hat = cross_val_predict(regressor</span><span class="s2">, </span><span class="s1">X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">cv=kf)</span>
+    <span class="s1">r2_scores.append([n_fold</span><span class="s2">, </span><span class="s1">r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s1">adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)])</span>
+    <span class="s1">print(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">n_fold</span><span class="s2">}\t\t{</span><span class="s1">r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">}\t\t{</span><span class="s1">adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+<span class="s1">r2_scores = np.array(r2_scores)</span>
+<span class="s0">#%% 
+</span><span class="s1">plt.figure(figsize=(</span><span class="s3">15</span><span class="s2">, </span><span class="s3">5</span><span class="s1">))</span>
+<span class="s1">plt.semilogx(r2_scores[:</span><span class="s2">, </span><span class="s3">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">r2_scores[:</span><span class="s2">, </span><span class="s3">2</span><span class="s1">])</span>
+<span class="s1">plt.xticks(r2_scores[:</span><span class="s2">, </span><span class="s3">0</span><span class="s1">]</span><span class="s2">, </span><span class="s1">r2_scores[:</span><span class="s2">, </span><span class="s3">0</span><span class="s1">])</span>
+<span class="s1">plt.show()</span>
+<span class="s0">#%% md 
+</span><span class="s1">Con n_fold=4 si ottiene il miglior risultato, con un adj. R2 score di **0.473**, che è però peggiore rispetto al risultato ottenuto con holdout validation. 
+</span><span class="s0">#%% 
+</span><span class="s1">n_fold = </span><span class="s3">4</span>
+<span class="s1">kf = KFold(n_splits=n_fold</span><span class="s2">, </span><span class="s1">random_state=RS</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">y_hat = cross_val_predict(regressor</span><span class="s2">, </span><span class="s1">X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">cv=kf)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Semplice&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:</span><span class="s3">1</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;K-fold (n_fold=4)&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s3">1</span><span class="s1">)})</span>
+<span class="s0">#%% md 
+</span><span class="s1"># Regressione lineare multipla 
+ 
+### Senza feature selection con holdout validation 
+</span><span class="s0">#%% 
+</span><span class="s1">X = df.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y = df[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+<span class="s1">X_train</span><span class="s2">, </span><span class="s1">X_test</span><span class="s2">, </span><span class="s1">Y_train</span><span class="s2">, </span><span class="s1">Y_test = train_test_split(X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">test_size=</span><span class="s3">0.2</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True, </span><span class="s1">random_state=RS)</span>
+
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">regressor.fit(X_train</span><span class="s2">, </span><span class="s1">Y_train)</span>
+<span class="s1">y_hat = regressor.predict(X_test)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y_test</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;Holdout&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si ottiene un ottimo risultato con un adjusted R2 score di **0.656**. 
+</span><span class="s0">#%% md 
+</span><span class="s1">### Senza feature selection, con k-fold cross validation 
+</span><span class="s0">#%% 
+</span><span class="s1">n_fold = </span><span class="s3">4</span>
+<span class="s1">kf = KFold(n_splits=n_fold</span><span class="s2">, </span><span class="s1">random_state=RS</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">y_hat = cross_val_predict(regressor</span><span class="s2">, </span><span class="s1">X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">cv=kf)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;K-fold (n_fold=4)&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si ottiene un adjusted R2 score di **0.644**, che è un buon risultato ma ancora una volta peggiore rispetto a quello ottenuto con holdout validation. 
+</span><span class="s0">#%% md 
+</span><span class="s1">## Con k-fold cross validation e feature selection 
+### Selezione delle feature: 
+Si prendono le feature con correlazione maggiore rispetto a _median_house_value_ 
+</span><span class="s0">#%% 
+</span><span class="s1">df_reg = df[[</span><span class="s4">'latitude'</span><span class="s2">, </span><span class="s4">'median_income'</span><span class="s2">, </span><span class="s4">'ocean_proximity_&lt;1H OCEAN'</span><span class="s2">,</span><span class="s4">'ocean_proximity_INLAND'</span><span class="s2">, </span><span class="s4">'median_house_value'</span><span class="s1">]]</span>
+<span class="s1">X = df_reg.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y = df_reg[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+
+<span class="s1">n_fold = </span><span class="s3">4</span>
+<span class="s1">kf = KFold(n_splits=n_fold</span><span class="s2">, </span><span class="s1">random_state=RS</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">y_hat = cross_val_predict(regressor</span><span class="s2">, </span><span class="s1">X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">cv=kf)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;K-fold (n_fold=4)&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% 
+</span><span class="s1">X_train</span><span class="s2">, </span><span class="s1">X_test</span><span class="s2">, </span><span class="s1">Y_train</span><span class="s2">, </span><span class="s1">Y_test = train_test_split(X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">test_size=</span><span class="s3">0.2</span><span class="s1">)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">regressor.fit(X_train</span><span class="s2">, </span><span class="s1">Y_train)</span>
+<span class="s1">y_hat = regressor.predict(X_test)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y_test</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;Holdout&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% md 
+</span><span class="s1">I risultati ottenuti sono peggiori, perciò conviene utilizzare tutte le feature. 
+</span><span class="s0">#%% md 
+</span><span class="s1"># Rimozione outlier 
+Dal grafico seguente si nota che il dato _median_house_value_ è stato limitato superiormente al valore 500000 e ciò potrebbe influenzare i risultati. 
+Si prova a rimuovere (solo dal train set) i dati con _median_house_value_ = 500000 e si verifica se i risultati migliorano. 
+</span><span class="s0">#%% 
+</span><span class="s1">sns.regplot(x=</span><span class="s4">'median_income'</span><span class="s2">, </span><span class="s1">y=</span><span class="s4">'median_house_value'</span><span class="s2">, </span><span class="s1">data=df)</span>
+<span class="s0">#%% 
+</span><span class="s1">df_reg = df.copy(deep=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">X = df_reg.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y = df_reg[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+<span class="s1">X_train</span><span class="s2">, </span><span class="s1">X_test</span><span class="s2">, </span><span class="s1">Y_train</span><span class="s2">, </span><span class="s1">Y_test = train_test_split(X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">test_size=</span><span class="s3">0.2</span><span class="s1">)</span>
+
+<span class="s1">df_train = pd.concat([X_train</span><span class="s2">, </span><span class="s1">Y_train]</span><span class="s2">, </span><span class="s1">axis=</span><span class="s3">1</span><span class="s1">)</span>
+<span class="s1">df_train = df_train[df_train[</span><span class="s4">'median_house_value'</span><span class="s1">] &lt; </span><span class="s3">500000</span><span class="s1">]</span>
+<span class="s1">X_train = df_train.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y_train = df_train[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+
+<span class="s1">sns.regplot(x=</span><span class="s4">'median_income'</span><span class="s2">, </span><span class="s1">y=</span><span class="s4">'median_house_value'</span><span class="s2">, </span><span class="s1">data=df_train)</span>
+<span class="s0">#%% 
+</span><span class="s1">regressor = LinearRegression()</span>
+<span class="s1">regressor.fit(X_train</span><span class="s2">, </span><span class="s1">Y_train)</span>
+<span class="s1">y_hat = regressor.predict(X_test)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y_test</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla con rimozione outlier&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;Holdout&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si ottengono dei buoni risultati, ma non migliori rispetto a quelli ottenuti senza rimuovere gli outlier. 
+</span><span class="s0">#%% md 
+</span><span class="s1"># Nuovo approccio 
+</span><span class="s0">#%% md 
+</span><span class="s1">Dalla mappa dei prezzi della California si nota che i prezzi sono più alti vicino alle grandi città, come San Francisco e Los Angeles. 
+(la funzione per il grafico è stata presa da &lt;a href=&quot;https://medium.com/mlearning-ai/implementing-linear-regression-on-california-housing-dataset-378e14e421b7&quot;&gt;qui&lt;/a&gt;) 
+</span><span class="s0">#%% 
+</span><span class="s1">df.plot(kind=</span><span class="s4">&quot;scatter&quot;</span><span class="s2">, </span><span class="s1">x=</span><span class="s4">&quot;longitude&quot;</span><span class="s2">,</span><span class="s1">y=</span><span class="s4">&quot;latitude&quot;</span><span class="s2">, </span><span class="s1">c=</span><span class="s4">&quot;median_house_value&quot;</span><span class="s2">, </span><span class="s1">cmap=</span><span class="s4">&quot;jet&quot;</span><span class="s2">, </span><span class="s1">colorbar=</span><span class="s2">True, </span><span class="s1">legend=</span><span class="s2">True, </span><span class="s1">sharex=</span><span class="s2">False, </span><span class="s1">figsize=(</span><span class="s3">10</span><span class="s2">,</span><span class="s3">7</span><span class="s1">)</span><span class="s2">, </span><span class="s1">s=df[</span><span class="s4">'population'</span><span class="s1">]/</span><span class="s3">100</span><span class="s2">, </span><span class="s1">label=</span><span class="s4">&quot;population&quot;</span><span class="s2">, </span><span class="s1">alpha=</span><span class="s3">0.7</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">Per tanto può essere utile aggiungere una feature, _distance_from_big_city_, che indichi la distanza da una grande città, calcolata come il minimo tra la distanza da San Francisco e da Los Angeles, e quindi introducendo una non linearità nel nostro modello. 
+</span><span class="s0">#%% 
+</span><span class="s1">san_francisco_coord = [-</span><span class="s3">122.4194</span><span class="s2">, </span><span class="s3">37.7749</span><span class="s1">]</span>
+<span class="s1">los_angeles_coord = [-</span><span class="s3">118.2437</span><span class="s2">, </span><span class="s3">34.0522</span><span class="s1">]</span>
+<span class="s0">#%% 
+</span><span class="s1">df_new = df.copy(deep=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">df_new[</span><span class="s4">'distance_from_SF'</span><span class="s1">] = np.sqrt((df[</span><span class="s4">'longitude'</span><span class="s1">] - san_francisco_coord[</span><span class="s3">0</span><span class="s1">])**</span><span class="s3">2 </span><span class="s1">+ (df[</span><span class="s4">'latitude'</span><span class="s1">] - san_francisco_coord[</span><span class="s3">1</span><span class="s1">])**</span><span class="s3">2</span><span class="s1">)</span>
+<span class="s1">df_new[</span><span class="s4">'distance_from_LA'</span><span class="s1">] = np.sqrt((df[</span><span class="s4">'longitude'</span><span class="s1">] - los_angeles_coord[</span><span class="s3">0</span><span class="s1">])**</span><span class="s3">2 </span><span class="s1">+ (df[</span><span class="s4">'latitude'</span><span class="s1">] - los_angeles_coord[</span><span class="s3">1</span><span class="s1">])**</span><span class="s3">2</span><span class="s1">)</span>
+<span class="s1">df_new[</span><span class="s4">'distance_from_big_city'</span><span class="s1">] = df_new[[</span><span class="s4">'distance_from_SF'</span><span class="s2">, </span><span class="s4">'distance_from_LA'</span><span class="s1">]].min(axis=</span><span class="s3">1</span><span class="s1">)</span>
+<span class="s1">df_new.drop(columns=[</span><span class="s4">'distance_from_SF'</span><span class="s2">, </span><span class="s4">'distance_from_LA'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">inplace=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si grafica la nuova feature per verificare che sia come ci si aspetta: 
+</span><span class="s0">#%% 
+</span><span class="s1">df_new.plot(kind=</span><span class="s4">&quot;scatter&quot;</span><span class="s2">, </span><span class="s1">x=</span><span class="s4">&quot;longitude&quot;</span><span class="s2">,</span><span class="s1">y=</span><span class="s4">&quot;latitude&quot;</span><span class="s2">, </span><span class="s1">c=</span><span class="s4">&quot;distance_from_big_city&quot;</span><span class="s2">, </span><span class="s1">cmap=</span><span class="s4">&quot;jet&quot;</span><span class="s2">, </span><span class="s1">colorbar=</span><span class="s2">True, </span><span class="s1">legend=</span><span class="s2">True, </span><span class="s1">sharex=</span><span class="s2">False, </span><span class="s1">figsize=(</span><span class="s3">10</span><span class="s2">,</span><span class="s3">7</span><span class="s1">)</span><span class="s2">, </span><span class="s1">alpha=</span><span class="s3">0.6</span><span class="s1">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">Valutiamo l'utilità di questa feature calcolandone la correlazione con _median_house_value_: 
+</span><span class="s0">#%% 
+</span><span class="s1">print(df_new[</span><span class="s4">'distance_from_big_city'</span><span class="s1">].corr(df_new[</span><span class="s4">'median_house_value'</span><span class="s1">]))</span>
+<span class="s1">sns.regplot(x=</span><span class="s4">'distance_from_big_city'</span><span class="s2">, </span><span class="s1">y=</span><span class="s4">'median_house_value'</span><span class="s2">, </span><span class="s1">data=df_new)</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si ottiene una correlazione abbastanza significativa, rispetto a quelle delle altre feature del dataset. 
+Valutiamo ora il modello con questa nuova feature: 
+</span><span class="s0">#%% 
+</span><span class="s1">X = df_new.drop(columns=[</span><span class="s4">'median_house_value'</span><span class="s1">])</span>
+<span class="s1">Y = df_new[</span><span class="s4">'median_house_value'</span><span class="s1">]</span>
+
+<span class="s1">X_train</span><span class="s2">, </span><span class="s1">X_test</span><span class="s2">, </span><span class="s1">Y_train</span><span class="s2">, </span><span class="s1">Y_test = train_test_split(X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">test_size=</span><span class="s3">0.2</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True, </span><span class="s1">random_state=RS)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">regressor.fit(X_train</span><span class="s2">, </span><span class="s1">Y_train)</span>
+<span class="s1">y_hat = regressor.predict(X_test)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y_test</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla con feature aggiunta&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;Holdout&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y_test</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% 
+</span><span class="s1">kf = KFold(n_splits=</span><span class="s3">4</span><span class="s2">, </span><span class="s1">random_state=RS</span><span class="s2">, </span><span class="s1">shuffle=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">regressor = LinearRegression()</span>
+<span class="s1">y_hat = cross_val_predict(regressor</span><span class="s2">, </span><span class="s1">X</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">cv=kf)</span>
+<span class="s1">prestazioni(y_hat</span><span class="s2">, </span><span class="s1">Y</span><span class="s2">, </span><span class="s1">len(X.columns))</span>
+<span class="s1">results.append({</span><span class="s4">&quot;tipo&quot;</span><span class="s1">:</span><span class="s4">&quot;Multipla con feature aggiunta&quot;</span><span class="s2">, </span><span class="s4">&quot;n_feature&quot;</span><span class="s1">:len(X.columns)</span><span class="s2">, </span><span class="s4">&quot;validation&quot;</span><span class="s1">:</span><span class="s4">&quot;K-fold (n_fold=4)&quot;</span><span class="s2">, </span><span class="s4">&quot;r2&quot;</span><span class="s1">:r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat)</span><span class="s2">, </span><span class="s4">&quot;adj_r2&quot;</span><span class="s1">:adj_r2_score(Y</span><span class="s2">, </span><span class="s1">y_hat</span><span class="s2">, </span><span class="s1">len(X.columns))})</span>
+<span class="s0">#%% md 
+</span><span class="s1">Si ottiene un R2 score di **0.670** che è migliore di tutti gli altri risultati 
+</span><span class="s0">#%% md 
+</span><span class="s1"># Recap dei risultati: 
+</span><span class="s0">#%% 
+</span><span class="s2">for </span><span class="s1">result </span><span class="s2">in </span><span class="s1">results:</span>
+    <span class="s1">print(</span><span class="s4">&quot;%-35s</span><span class="s2">\t</span><span class="s4">%-5i</span><span class="s2">\t</span><span class="s4">%-20s</span><span class="s2">\t</span><span class="s4">%6f</span><span class="s2">\t</span><span class="s4">%f&quot; </span><span class="s1">% (result[</span><span class="s4">'tipo'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">result[</span><span class="s4">'n_feature'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">result[</span><span class="s4">'validation'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">result[</span><span class="s4">'r2'</span><span class="s1">]</span><span class="s2">, </span><span class="s1">result[</span><span class="s4">'adj_r2'</span><span class="s1">]))</span></pre>
+</body>
+</html>
